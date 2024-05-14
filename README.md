@@ -26,3 +26,6 @@ This is a Telegram bot that collects requests from students and applicants and s
    npm install
 
 3. Edit .env and set your bot token and API URL.
+4. Run bot:
+   ```bash
+   node --env-file=.env bot.js
