@@ -1,11 +1,11 @@
 const { Telegraf } = require('telegraf');
 const axios = require('axios');
 
-// Token бота из переменных окружения
+// Token бота в Father Bot
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
-// URL вашего API для отправки заявок из переменных окружения
-const API_URL = `${process.env.API_URL}`;
+// URL вашего API для отправки заявок
+const API_URL = `${process.env.API_URL}/incidents`;
 
 // Переменные для хранения данных пользователей
 const userData = {};
@@ -14,11 +14,6 @@ const userData = {};
 const texts = {
   en: {
     chooseLanguage: 'Please select your language:',
-    mainMenu: 'Please choose an option:',
-    requestStatus: 'View Request Status',
-    newRequest: 'Submit a New Request',
-    cancelRequest: 'Cancel Request',
-    backToMenu: 'Back to Menu',
     welcome: 'Welcome! Please select your status:',
     student: 'Student',
     applicant: 'Applicant',
@@ -33,11 +28,6 @@ const texts = {
   },
   ru: {
     chooseLanguage: 'Пожалуйста, выберите ваш язык:',
-    mainMenu: 'Пожалуйста, выберите опцию:',
-    requestStatus: 'Просмотр статуса заявки',
-    newRequest: 'Отправить новую заявку',
-    cancelRequest: 'Отменить заявку',
-    backToMenu: 'Назад в меню',
     welcome: 'Добро пожаловать! Пожалуйста, выберите ваш статус:',
     student: 'Студент',
     applicant: 'Абитуриент',
@@ -69,92 +59,25 @@ bot.start((ctx) => {
 
 // Обработка выбора языка
 bot.action('lang_en', (ctx) => {
-  userData[ctx.from.id] = { lang: 'en', step: 'mainMenu' };
-  ctx.reply(texts.en.mainMenu, {
-    reply_markup: {
-      keyboard: [
-        [{ text: texts.en.newRequest }],
-        [{ text: texts.en.requestStatus }],
-        [{ text: texts.en.cancelRequest }]
-      ],
-      resize_keyboard: true,
-      one_time_keyboard: true
-    }
-  });
-});
-
-bot.action('lang_ru', (ctx) => {
-  userData[ctx.from.id] = { lang: 'ru', step: 'mainMenu' };
-  ctx.reply(texts.ru.mainMenu, {
-    reply_markup: {
-      keyboard: [
-        [{ text: texts.ru.newRequest }],
-        [{ text: texts.ru.requestStatus }],
-        [{ text: texts.ru.cancelRequest }]
-      ],
-      resize_keyboard: true,
-      one_time_keyboard: true
-    }
-  });
-});
-
-// Обработка нажатий кнопок меню
-bot.hears([texts.en.newRequest, texts.ru.newRequest], (ctx) => {
-  const user = userData[ctx.from.id];
-  user.step = 'chooseStatus';
-  ctx.reply(texts[user.lang].welcome, {
+  userData[ctx.from.id] = { lang: 'en', step: 'chooseStatus' };
+  ctx.reply(texts.en.welcome, {
     reply_markup: {
       inline_keyboard: [
-        [{ text: texts[user.lang].student, callback_data: 'student' }],
-        [{ text: texts[user.lang].applicant, callback_data: 'applicant' }],
-        [{ text: texts[user.lang].backToMenu, callback_data: 'backToMenu' }]
+        [{ text: texts.en.student, callback_data: 'student' }],
+        [{ text: texts.en.applicant, callback_data: 'applicant' }]
       ]
     }
   });
 });
 
-bot.hears([texts.en.requestStatus, texts.ru.requestStatus], (ctx) => {
-  const user = userData[ctx.from.id];
-  ctx.reply(`Your request status will be shown here. (This is a placeholder response)`, {
+bot.action('lang_ru', (ctx) => {
+  userData[ctx.from.id] = { lang: 'ru', step: 'chooseStatus' };
+  ctx.reply(texts.ru.welcome, {
     reply_markup: {
-      keyboard: [
-        [{ text: texts[user.lang].backToMenu }]
-      ],
-      resize_keyboard: true,
-      one_time_keyboard: true
-    }
-  });
-});
-
-bot.hears([texts.en.cancelRequest, texts.ru.cancelRequest], (ctx) => {
-  const user = userData[ctx.from.id];
-  delete userData[ctx.from.id];
-  ctx.reply(`Your request has been canceled. (This is a placeholder response)`);
-  ctx.reply(texts[user.lang].mainMenu, {
-    reply_markup: {
-      keyboard: [
-        [{ text: texts[user.lang].newRequest }],
-        [{ text: texts[user.lang].requestStatus }],
-        [{ text: texts[user.lang].cancelRequest }]
-      ],
-      resize_keyboard: true,
-      one_time_keyboard: true
-    }
-  });
-});
-
-bot.action('backToMenu', (ctx) => {
-  const user = userData[ctx.from.id];
-  user.step = 'mainMenu';
-  ctx.reply(texts[user.lang].mainMenu, {
-    reply_markup: {
-      keyboard: [
-        [{ text: texts[user.lang].newRequest }],
-        [{ text: texts[user.lang].requestStatus }],
-        [{ text: texts[user.lang].cancelRequest }]
-      ],
-      resize_keyboard: true,
-      one_time_keyboard: true
+      inline_keyboard: [
+        [{ text: texts.ru.student, callback_data: 'student' }],
+        [{ text: texts.ru.applicant, callback_data: 'applicant' }]
+      ]
     }
   });
 });
@@ -164,26 +87,14 @@ bot.action('student', (ctx) => {
   const user = userData[ctx.from.id];
   user.type = 'student';
   user.step = 'enterName';
-  ctx.reply(texts[user.lang].enterName, {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: texts[user.lang].backToMenu, callback_data: 'backToMenu' }]
-      ]
-    }
-  });
+  ctx.reply(texts[user.lang].enterName);
 });
 
 bot.action('applicant', (ctx) => {
   const user = userData[ctx.from.id];
   user.type = 'applicant';
   user.step = 'enterName';
-  ctx.reply(texts[user.lang].enterName, {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: texts[user.lang].backToMenu, callback_data: 'backToMenu' }]
-      ]
-    }
-  });
+  ctx.reply(texts[user.lang].enterName);
 });
 
 // Обработка текстовых сообщений по шагам
@@ -201,45 +112,21 @@ bot.on('text', async (ctx) => {
   switch (step) {
     case 'enterName':
       if (!nameRegex.test(message.trim())) {
-        return ctx.reply(texts[lang].invalidName, {
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: texts[lang].backToMenu, callback_data: 'backToMenu' }]
-            ]
-          }
-        });
+        return ctx.reply(texts[lang].invalidName);
       }
       user.fio = message.trim();
       user.step = user.type === 'student' ? 'enterGroup' : 'enterSchool';
-      ctx.reply(user.type === 'student' ? texts[lang].enterGroup : texts[lang].enterSchool, {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: texts[lang].backToMenu, callback_data: 'backToMenu' }]
-          ]
-        }
-      });
+      ctx.reply(user.type === 'student' ? texts[lang].enterGroup : texts[lang].enterSchool);
       break;
     case 'enterGroup':
       user.group = message.trim();
       user.step = 'enterReason';
-      ctx.reply(texts[lang].enterReason, {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: texts[lang].backToMenu, callback_data: 'backToMenu' }]
-          ]
-        }
-      });
+      ctx.reply(texts[lang].enterReason);
       break;
     case 'enterSchool':
       user.school = message.trim();
       user.step = 'enterReason';
-      ctx.reply(texts[lang].enterReason, {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: texts[lang].backToMenu, callback_data: 'backToMenu' }]
-          ]
-        }
-      });
+      ctx.reply(texts[lang].enterReason);
       break;
     case 'enterReason':
       user.reason = message.trim();
@@ -255,38 +142,24 @@ bot.on('text', async (ctx) => {
           source: 'telegram',
           chatId: ctx.chat.id,
           username: ctx.message.from.username,
-          userType: user.type
+          userType: user.type,
+          date: new Date().toISOString().split('T')[0],
+          time: new Date().toTimeString().split(' ')[0],
+          status: 'new',
+          phone: null
         });
 
-        ctx.reply(texts[lang].success, {
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: texts[lang].backToMenu, callback_data: 'backToMenu' }]
-            ]
-          }
-        });
+        ctx.reply(texts[lang].success);
       } catch (error) {
         console.error('Ошибка при отправке заявки:', error);
-        ctx.reply(texts[lang].error, {
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: texts[lang].backToMenu, callback_data: 'backToMenu' }]
-            ]
-          }
-        });
+        ctx.reply(texts[lang].error);
       }
 
       // Очистка данных пользователя после отправки заявки
       delete userData[ctx.from.id];
       break;
     default:
-      ctx.reply(texts[lang].restart, {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: texts[lang].backToMenu, callback_data: 'backToMenu' }]
-          ]
-        }
-      });
+      ctx.reply(texts[lang].restart);
       break;
   }
 });
