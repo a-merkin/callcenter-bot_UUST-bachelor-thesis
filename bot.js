@@ -1,11 +1,15 @@
 const { Telegraf } = require('telegraf');
 const axios = require('axios');
+const io = require('socket.io-client');
 
 // Token бота в Father Bot
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
 // URL вашего API для отправки заявок
 const API_URL = `${process.env.API_URL}/incidents`;
+
+// URL WebSocket сервера
+const SOCKET_URL = `${process.env.API_URL}/chat`;
 
 // Переменные для хранения данных пользователей
 const userData = {};
@@ -24,7 +28,8 @@ const texts = {
     success: 'Your request has been successfully sent!',
     error: 'An error occurred while sending the request. Please try again later.',
     restart: 'Please first select your language by sending the /start command.',
-    invalidName: 'Invalid name format. Please enter your full name (First name Last name and optionally Middle name).'
+    invalidName: 'Invalid name format. Please enter your full name (First name Last name and optionally Middle name).',
+    waitingForOperator: 'Your application has been successfully sent. We connect the operator...'
   },
   ru: {
     chooseLanguage: 'Пожалуйста, выберите ваш язык:',
@@ -38,7 +43,8 @@ const texts = {
     success: 'Ваша заявка успешно отправлена!',
     error: 'Произошла ошибка при отправке заявки. Пожалуйста, попробуйте позже.',
     restart: 'Пожалуйста, сначала выберите ваш язык, отправив команду /start.',
-    invalidName: 'Неверный формат имени. Пожалуйста, введите ваше полное имя (Фамилия Имя Отчество при наличии).'
+    invalidName: 'Неверный формат имени. Пожалуйста, введите ваше полное имя (Фамилия Имя Отчество при наличии).',
+    waitingForOperator: 'Ваша заявка успешно отправлена. Подключаем оператора...'
   }
 };
 
@@ -47,6 +53,7 @@ const nameRegex = /^[А-Яа-яЁёA-Za-z]+ [А-Яа-яЁёA-Za-z]+( [А-Яа-я
 
 // Стартовое сообщение
 bot.start((ctx) => {
+  userData[ctx.from.id] = { lang: 'ru' }; // Установка языка по умолчанию
   ctx.reply(texts.ru.chooseLanguage, {
     reply_markup: {
       inline_keyboard: [
@@ -59,7 +66,7 @@ bot.start((ctx) => {
 
 // Обработка выбора языка
 bot.action('lang_en', (ctx) => {
-  userData[ctx.from.id] = { lang: 'en', step: 'chooseStatus' };
+  userData[ctx.from.id] = { ...userData[ctx.from.id], lang: 'en', step: 'chooseStatus' };
   ctx.reply(texts.en.welcome, {
     reply_markup: {
       inline_keyboard: [
@@ -71,7 +78,7 @@ bot.action('lang_en', (ctx) => {
 });
 
 bot.action('lang_ru', (ctx) => {
-  userData[ctx.from.id] = { lang: 'ru', step: 'chooseStatus' };
+  userData[ctx.from.id] = { ...userData[ctx.from.id], lang: 'ru', step: 'chooseStatus' };
   ctx.reply(texts.ru.welcome, {
     reply_markup: {
       inline_keyboard: [
@@ -134,7 +141,7 @@ bot.on('text', async (ctx) => {
 
       // Отправка данных на сервер
       try {
-        await axios.post(API_URL, {
+        const response = await axios.post(API_URL, {
           fio: user.fio,
           group: user.group,
           school: user.school,
@@ -149,14 +156,27 @@ bot.on('text', async (ctx) => {
           phone: null
         });
 
+        ctx.reply(texts[lang].waitingForOperator);
+
+        const { id } = response.data;
+
+        // Установка соединения с WebSocket сервером и создание чата
+        const socket = io(SOCKET_URL);
+
+        socket.emit('joinChat', id);
+        
+        socket.on('receiveMessage', (message) => {
+          ctx.reply(`${message}`);
+        });
+
+        userData[ctx.from.id].socket = socket;
+
         ctx.reply(texts[lang].success);
       } catch (error) {
         console.error('Ошибка при отправке заявки:', error);
         ctx.reply(texts[lang].error);
       }
 
-      // Очистка данных пользователя после отправки заявки
-      delete userData[ctx.from.id];
       break;
     default:
       ctx.reply(texts[lang].restart);
