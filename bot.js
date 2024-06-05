@@ -1,18 +1,43 @@
 const { Telegraf } = require('telegraf');
-const axios = require('axios');
-const io = require('socket.io-client');
 
 // Token бота в Father Bot
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
-// URL вашего API для отправки заявок
-const API_URL = `${process.env.API_URL}/incidents`;
-
-// URL WebSocket сервера
-const SOCKET_URL = `${process.env.API_URL}/chat`;
-
 // Переменные для хранения данных пользователей
 const userData = {};
+
+// Тестовые данные заявок
+const testData = [
+  {
+    id: 1,
+    fio: 'Меркин А.Д.',
+    group: 'MTH-101',
+    faculty: 'ИИМРТ',
+    school: null,
+    reason: 'Прошу разрешить пересдать экзамен по математике.',
+    time: '15:38',
+    date: '15.05',
+    source: 'bot',
+    phone: null,
+    status: 'new',
+    username: 'merkad'
+  },
+  {
+    id: 2,
+    fio: null,
+    group: null,
+    school: 'Школа №15',
+    faculty: null,
+    reason: 'Необходимо получить справку об обучении для предоставления в военкомат.',
+    time: '10:20',
+    date: '01.05',
+    source: 'call',
+    phone: '123-456-7890',
+    status: 'in-progress',
+    username: 'ivanov'
+  },
+  // Add more test data as needed
+];
 
 // Тексты на разных языках
 const texts = {
@@ -29,7 +54,11 @@ const texts = {
     error: 'An error occurred while sending the request. Please try again later.',
     restart: 'Please first select your language by sending the /start command.',
     invalidName: 'Invalid name format. Please enter your full name (First name Last name and optionally Middle name).',
-    waitingForOperator: 'Your application has been successfully sent. We connect the operator...'
+    waitingForOperator: 'Your application has been successfully sent. We connect the operator...',
+    noApplications: 'You have no applications.',
+    applications: 'Your applications:',
+    close: 'Close',
+    closed: 'Application closed successfully.'
   },
   ru: {
     chooseLanguage: 'Пожалуйста, выберите ваш язык:',
@@ -44,7 +73,11 @@ const texts = {
     error: 'Произошла ошибка при отправке заявки. Пожалуйста, попробуйте позже.',
     restart: 'Пожалуйста, сначала выберите ваш язык, отправив команду /start.',
     invalidName: 'Неверный формат имени. Пожалуйста, введите ваше полное имя (Фамилия Имя Отчество при наличии).',
-    waitingForOperator: 'Ваша заявка успешно отправлена. Подключаем оператора...'
+    waitingForOperator: 'Ваша заявка успешно отправлена. Подключаем оператора...',
+    noApplications: 'У вас нет заявок.',
+    applications: 'Ваши заявки:',
+    close: 'Закрыть',
+    closed: 'Заявка успешно закрыта.'
   }
 };
 
@@ -54,7 +87,7 @@ const nameRegex = /^[А-Яа-яЁёA-Za-z]+ [А-Яа-яЁёA-Za-z]+( [А-Яа-я
 // Стартовое сообщение
 bot.start((ctx) => {
   userData[ctx.from.id] = { lang: 'ru' }; // Установка языка по умолчанию
-  ctx.reply(texts.ru.chooseLanguage, {
+  ctx.reply(`${texts.ru.chooseLanguage}`, {
     reply_markup: {
       inline_keyboard: [
         [{ text: 'English', callback_data: 'lang_en' }],
@@ -105,7 +138,7 @@ bot.action('applicant', (ctx) => {
 });
 
 // Обработка текстовых сообщений по шагам
-bot.on('text', async (ctx) => {
+bot.on('text', (ctx) => {
   const user = userData[ctx.from.id];
 
   if (!user) {
@@ -122,8 +155,16 @@ bot.on('text', async (ctx) => {
         return ctx.reply(texts[lang].invalidName);
       }
       user.fio = message.trim();
-      user.step = user.type === 'student' ? 'enterGroup' : 'enterSchool';
-      ctx.reply(user.type === 'student' ? texts[lang].enterGroup : texts[lang].enterSchool);
+      user.step = 'menu';
+      sendMenu(ctx, lang);
+      break;
+    case 'menu':
+      if (message === 'Новая заявка') {
+        user.step = user.type === 'student' ? 'enterGroup' : 'enterSchool';
+        ctx.reply(user.type === 'student' ? texts[lang].enterGroup : texts[lang].enterSchool);
+      } else if (message === 'Мои заявки') {
+        showApplications(ctx, user);
+      }
       break;
     case 'enterGroup':
       user.group = message.trim();
@@ -137,51 +178,109 @@ bot.on('text', async (ctx) => {
       break;
     case 'enterReason':
       user.reason = message.trim();
-      user.step = 'done';
+      user.step = 'menu';
 
-      // Отправка данных на сервер
-      try {
-        const response = await axios.post(API_URL, {
-          fio: user.fio,
-          group: user.group,
-          school: user.school,
-          reason: user.reason,
-          source: 'telegram',
-          chatId: ctx.chat.id,
-          username: ctx.message.from.username,
-          userType: user.type,
-          date: new Date().toISOString().split('T')[0],
-          time: new Date().toTimeString().split(' ')[0],
-          status: 'new',
-          phone: null
-        });
+      // Добавление тестовой заявки
+      const newId = testData.length + 1;
+      testData.push({
+        id: newId,
+        fio: user.fio,
+        group: user.group,
+        school: user.school,
+        reason: user.reason,
+        source: 'telegram',
+        chatId: ctx.chat.id,
+        username: ctx.message.from.username,
+        userType: user.type,
+        date: new Date().toISOString().split('T')[0],
+        time: new Date().toTimeString().split(' ')[0],
+        status: 'new',
+        phone: null
+      });
 
-        ctx.reply(texts[lang].waitingForOperator);
+      ctx.reply(texts[lang].waitingForOperator);
+      ctx.reply(texts[lang].success);
 
-        const { id } = response.data;
-
-        // Установка соединения с WebSocket сервером и создание чата
-        const socket = io(SOCKET_URL);
-
-        socket.emit('joinChat', id);
-        
-        socket.on('receiveMessage', (message) => {
-          ctx.reply(`${message}`);
-        });
-
-        userData[ctx.from.id].socket = socket;
-
-        ctx.reply(texts[lang].success);
-      } catch (error) {
-        console.error('Ошибка при отправке заявки:', error);
-        ctx.reply(texts[lang].error);
-      }
-
+      // После успешной отправки заявки показать меню
+      sendMenu(ctx, lang);
       break;
     default:
       ctx.reply(texts[lang].restart);
       break;
   }
+});
+
+// Функция для отправки меню
+function sendMenu(ctx, lang) {
+  ctx.reply('Выберите действие:', {
+    reply_markup: {
+      keyboard: [
+        [{ text: 'Новая заявка' }, { text: 'Мои заявки' }]
+      ],
+      resize_keyboard: true,
+      one_time_keyboard: false
+    }
+  });
+}
+
+// Обработка нажатия кнопки "Мои заявки"
+bot.hears('Мои заявки', (ctx) => {
+  const user = userData[ctx.from.id];
+  if (!user) {
+    return ctx.reply('Пожалуйста, сначала выберите ваш язык, отправив команду /start.');
+  }
+
+  showApplications(ctx, user);
+});
+
+// Функция для отображения заявок пользователя
+function showApplications(ctx, user) {
+  const lang = user.lang;
+
+  // Отображение тестовых данных
+  const userApplications = testData.filter(app => app.username === ctx.message.from.username);
+  if (userApplications.length === 0) {
+    return ctx.reply(texts[lang].noApplications);
+  }
+
+  let response = `${texts[lang].applications}\n`;
+  userApplications.forEach(app => {
+    response += `\nЗаявка №${app.id}:\n` +
+      `ФИО: ${app.fio || 'Не указано'}\n` +
+      `Группа: ${app.group || 'Не указано'}\n` +
+      `Школа: ${app.school || 'Не указано'}\n` +
+      `Причина: ${app.reason}\n` +
+      `Статус: ${app.status}\n` +
+      `Дата: ${app.date}\n` +
+      `Время: ${app.time}\n`;
+  });
+
+  ctx.reply(response, {
+    reply_markup: {
+      inline_keyboard: userApplications.map(app => [{
+        text: texts[lang].close,
+        callback_data: `close_${app.id}`
+      }])
+    }
+  });
+}
+
+// Обработка команды для закрытия заявки
+bot.action(/close_(\d+)/, (ctx) => {
+  const id = ctx.match[1];
+  const user = userData[ctx.from.id];
+
+  // Найти заявку по ID
+  const application = testData.find(app => app.id == id && app.username === ctx.message.from.username);
+
+  if (!application) {
+    return ctx.reply('Заявка не найдена.');
+  }
+
+  // Обновить статус заявки на 'closed'
+  application.status = 'closed';
+
+  ctx.reply(`Заявка №${id} успешно закрыта.`);
 });
 
 // Запуск бота
